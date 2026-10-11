@@ -10,6 +10,9 @@ service cloud.firestore {
     function can(m) { return adm() || rp('Socio', m) || rp('Supervisor', m) || rp('Vendedor', m) || rp('Cliente', m) || rp('Soporte', m); }
     function ops() { return can('cli') || can('ven') || can('age') || can('tic') || can('pag') || can('res'); }
     function noBoss() { return !exists(/databases/$(db)/documents/config/main); }
+    function seeAll() { return adm() || has('Socio') || has('Supervisor') || has('Soporte'); }
+    function mine(f) { return seeAll() || resource.data[f] == request.auth.uid; }
+    function mineNew(f) { return seeAll() || request.resource.data[f] == request.auth.uid; }
 
     match /users/{u} {
       allow read: if ok();
@@ -28,14 +31,59 @@ service cloud.firestore {
     match /config/state {
       allow read, write: if ok() || (request.auth != null && noBoss());
     }
-    match /clients/{d} { allow read: if ops(); allow write: if can('cli') || can('ven'); }
-    match /pay/{d} { allow read: if ops(); allow write: if can('cli') || can('pag'); }
-    match /tickets/{d} { allow read: if ops(); allow write: if can('tic') || can('cli'); }
-    match /agenda/{d} { allow read: if ops(); allow write: if can('age') || can('cli') || can('ven'); }
-    match /log/{d} { allow read, write: if ops(); }
+    match /clients/{d} {
+      allow read: if ops() && mine('sellerId');
+      allow create: if (can('cli') || can('ven')) && mineNew('sellerId');
+      allow update: if (can('cli') || can('ven')) && (seeAll() || (resource.data.sellerId == request.auth.uid && request.resource.data.sellerId == request.auth.uid && request.resource.data.active == resource.data.active));
+      allow delete: if adm();
+    }
+    match /pay/{d} {
+      allow read: if ops() && mine('sellerId');
+      allow create: if (can('cli') || can('pag')) && mineNew('sellerId');
+      allow update: if seeAll() && (can('cli') || can('pag') || can('ven'));
+      allow delete: if adm();
+    }
+    match /tickets/{d} {
+      allow read: if ops() && mine('sellerId');
+      allow create: if (can('tic') || can('cli')) && mineNew('sellerId');
+      allow update: if (can('tic') || can('cli')) && mine('sellerId');
+      allow delete: if adm();
+    }
+    match /agenda/{d} {
+      allow read: if ops() && mine('userId');
+      allow create: if (can('age') || can('cli') || can('ven')) && mineNew('userId');
+      allow update: if (can('age') || can('cli') || can('ven')) && mine('userId') && mineNew('userId');
+      allow delete: if (can('age') || can('cli') || can('ven')) && mine('userId');
+    }
+    match /log/{d} {
+      allow read: if ops() && mine('sellerId');
+      allow create: if ops() && mineNew('sellerId');
+      allow update, delete: if adm();
+    }
+    match /reqs/{d} {
+      allow read: if ops() && mine('vend');
+      allow create: if can('pag') || can('cli');
+      allow update: if ok() && (seeAll() || resource.data.vend == request.auth.uid);
+      allow delete: if adm();
+    }
+    match /ledger/{d} {
+      allow read: if ok() && (adm() || has('Socio') || request.auth.uid in resource.data.uids);
+      allow create: if (request.resource.data.type == 'comision' && (can('cli') || can('pag'))) || adm();
+      allow update, delete: if adm();
+    }
+    match /notifs/{d} {
+      allow read: if request.auth != null && resource.data.to == request.auth.uid;
+      allow create: if ok();
+      allow update, delete: if request.auth != null && resource.data.to == request.auth.uid;
+    }
+    match /audit/{d} {
+      allow read: if adm() || has('Socio') || (has('Supervisor') && resource.data.sup == request.auth.uid);
+      allow create: if ok();
+      allow update, delete: if false;
+    }
     match /apps/{d} { allow read: if ok(); allow write: if can('apl'); }
-    match /reqs/{d} { allow read: if ops(); allow create: if can('pag') || can('cli'); allow update, delete: if adm(); }
-    match /hist/{d} { allow read, write: if adm(); }
-    match /keys/{d} { allow read, write: if adm(); }
+    match /exp/{d} { allow read, write: if adm() || has('Socio'); }
+    match /hist/{d} { allow read, write: if adm() || has('Soporte'); }
+    match /keys/{d} { allow read: if adm() || has('Soporte'); allow write: if adm(); }
   }
 }
