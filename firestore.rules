@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function me() { return get(/databases/$(db)/documents/users/$(request.auth.uid)).data; }
+    function ok() { return request.auth != null && exists(/databases/$(db)/documents/users/$(request.auth.uid)) && me().active != false; }
+    function has(r) { return ok() && r in me().roles; }
+    function adm() { return has('Administrador'); }
+    function cfg() { return get(/databases/$(db)/documents/config/main).data; }
+    function rp(r, m) { return has(r) && m in cfg().perm.get(r, []); }
+    function can(m) { return adm() || rp('Socio', m) || rp('Supervisor', m) || rp('Vendedor', m) || rp('Cliente', m) || rp('Soporte', m); }
+    function ops() { return can('cli') || can('ven') || can('age') || can('tic') || can('pag') || can('res'); }
+    function noBoss() { return !exists(/databases/$(db)/documents/config/main); }
+
+    match /users/{u} {
+      allow read: if ok();
+      allow create: if (request.auth != null && request.auth.uid == u && request.resource.data.roles == ['Administrador'] && noBoss())
+                    || adm() || (can('ven') && request.resource.data.roles == ['Vendedor']);
+      allow update, delete: if adm() || (can('ven') && resource.data.roles == ['Vendedor'] && (request.method == 'delete' || request.resource.data.roles == ['Vendedor']));
+    }
+    match /config/main {
+      allow read: if ok();
+      allow create: if request.auth != null && noBoss();
+      allow update: if adm();
+    }
+    match /config/state {
+      allow read, write: if ok() || (request.auth != null && noBoss());
+    }
+    match /clients/{d} { allow read: if ops(); allow write: if can('cli') || can('ven'); }
+    match /pay/{d} { allow read: if ops(); allow write: if can('cli') || can('pag'); }
+    match /tickets/{d} { allow read: if ops(); allow write: if can('tic') || can('cli'); }
+    match /agenda/{d} { allow read: if ops(); allow write: if can('age') || can('cli') || can('ven'); }
+    match /log/{d} { allow read, write: if ops(); }
+    match /hist/{d} { allow read, write: if adm(); }
+    match /keys/{d} { allow read, write: if adm(); }
+  }
+}
