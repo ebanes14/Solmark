@@ -81,6 +81,11 @@ service cloud.firestore {
       allow create: if ok();
       allow update, delete: if false;
     }
+    match /receipts/{d} {
+      allow read: if ops() && mine('sellerId');
+      allow create: if adm() || has('Socio') || has('Supervisor');
+      allow update, delete: if adm();
+    }
     match /apps/{d} { allow read: if ok(); allow write: if can('apl'); }
     match /exp/{d} { allow read, write: if adm() || has('Socio'); }
     match /hist/{d} { allow read, write: if adm() || has('Soporte'); }
