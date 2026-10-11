@@ -15,7 +15,10 @@ service cloud.firestore {
       allow read: if ok();
       allow create: if (request.auth != null && request.auth.uid == u && request.resource.data.roles == ['Administrador'] && noBoss())
                     || adm() || (can('ven') && request.resource.data.roles == ['Vendedor']);
-      allow update, delete: if adm() || (can('ven') && resource.data.roles == ['Vendedor'] && (request.method == 'delete' || request.resource.data.roles == ['Vendedor']));
+      allow update: if adm()
+                    || (request.auth.uid == u && request.resource.data.roles == resource.data.roles && request.resource.data.active == resource.data.active)
+                    || (can('ven') && resource.data.roles == ['Vendedor'] && request.resource.data.roles == ['Vendedor']);
+      allow delete: if adm() || (can('ven') && resource.data.roles == ['Vendedor']);
     }
     match /config/main {
       allow read: if ok();
@@ -30,6 +33,8 @@ service cloud.firestore {
     match /tickets/{d} { allow read: if ops(); allow write: if can('tic') || can('cli'); }
     match /agenda/{d} { allow read: if ops(); allow write: if can('age') || can('cli') || can('ven'); }
     match /log/{d} { allow read, write: if ops(); }
+    match /apps/{d} { allow read: if ok(); allow write: if can('apl'); }
+    match /reqs/{d} { allow read: if ops(); allow create: if can('pag') || can('cli'); allow update, delete: if adm(); }
     match /hist/{d} { allow read, write: if adm(); }
     match /keys/{d} { allow read, write: if adm(); }
   }
